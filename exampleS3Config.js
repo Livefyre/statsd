@@ -103,12 +103,17 @@ Optional Variables:
     accessKeyId: "abc",
     secretAccessKey: "secret",
     bucket: "abucket",
-    numBufferedIntervals: 12,
+    numBufferedIntervals: 1,
+    sparse: true,
+    precision: 1,
+    noUpload: false,
+    failedUploadDelay: 2,
+    debug: true,
     keyName: function (timestamps) {
       return "key-" + timestamps[0] + "-" + timestamps[timestamps.length - 1];
     }
   },
-  flushInterval: 1 * 1000,
+  flushInterval: 5 * 1000,
   shutdownWait: 5 * 1000,
   backends: [ "./backends/s3" ]
 }
