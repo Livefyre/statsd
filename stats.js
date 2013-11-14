@@ -50,7 +50,7 @@ function loadBackend(config, name) {
 var conf;
 
 // Flush metrics to each backend.
-function flushMetrics() {
+function flushMetrics(force) {
   var time_stamp = Math.round(new Date().getTime() / 1000);
   if (old_timestamp > 0) {
     gauges[timestamp_lag_namespace] = (time_stamp - old_timestamp - (Number(conf.flushInterval)/1000));
@@ -128,7 +128,7 @@ function flushMetrics() {
   });
 
   pm.process_metrics(metrics_hash, flushInterval, time_stamp, function emitFlush(metrics) {
-    backendEvents.emit('flush', time_stamp, metrics);
+    backendEvents.emit('flush', time_stamp, metrics, force);
   });
 
 }
@@ -418,4 +418,16 @@ config.configFile(process.argv[2], function (config, oldConfig) {
 
 process.on('exit', function () {
   flushMetrics();
+});
+
+process.on('SIGINT', function() {
+  console.log('Got SIGINT.  Performing final flush...');
+  flushMetrics(function () {
+    console.log('Done!');
+    process.exit(0);
+  });
+  setTimeout(function () {
+    console.log('Final flush incomplete!');
+    process.exit(1);
+  }, conf.shutdownWait || 500);
 });

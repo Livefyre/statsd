@@ -45,7 +45,7 @@ var setsNamespace    = [];
 
 var graphiteStats = {};
 
-var post_stats = function graphite_post_stats(statString) {
+var post_stats = function graphite_post_stats(timestamp, statString) {
   var last_flush = graphiteStats.last_flush || 0;
   var last_exception = graphiteStats.last_exception || 0;
   var flush_time = graphiteStats.flush_time || 0;
@@ -83,7 +83,7 @@ var post_stats = function graphite_post_stats(statString) {
   }
 };
 
-var flush_stats = function graphite_flush(ts, metrics) {
+var flush_stats = function graphite_flush(ts, metrics, writer) {
   var ts_suffix = ' ' + ts + "\n";
   var starttime = Date.now();
   var statString = '';
@@ -164,7 +164,7 @@ var flush_stats = function graphite_flush(ts, metrics) {
       statString += the_key.join(".") + globalSuffix + statsd_metrics[key] + ts_suffix;
     }
   }
-  post_stats(statString);
+  writer(ts, statString);
 
   if (debug) {
    l.log("numStats: " + numStats);
@@ -180,6 +180,7 @@ var backend_status = function graphite_status(writeCb) {
 exports.init = function graphite_init(startup_time, config, events) {
   l = new logger.Logger(config.log || {});
   debug = config.debug;
+  writer = config.writer || post_stats;
   graphiteHost = config.graphiteHost;
   graphitePort = config.graphitePort;
   config.graphite = config.graphite || {};
@@ -242,7 +243,11 @@ exports.init = function graphite_init(startup_time, config, events) {
 
   flush_counts = typeof(config.flush_counts) === "undefined" ? true : config.flush_counts;
 
-  events.on('flush', flush_stats);
+  events.on('flush', function (ts, metrics, force) {
+    flush_stats(ts, metrics, function (ts, statString) {
+      writer(ts, statString, force);
+    });
+  });
   events.on('status', backend_status);
 
   return true;
