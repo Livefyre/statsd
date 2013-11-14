@@ -416,18 +416,27 @@ config.configFile(process.argv[2], function (config, oldConfig) {
   }
 });
 
-process.on('exit', function () {
-  flushMetrics();
-});
+var finalFlushIssued = false;
 
-process.on('SIGINT', function() {
-  console.log('Got SIGINT.  Performing final flush...');
+var forceFlush = function () {
+  if (finalFlushIssued) {
+    return;
+  }
+  finalFlushIssued = true;
+  console.log('Performing final flush...');
   flushMetrics(function () {
-    console.log('Done!');
+    console.log('Final flush complete!');
     process.exit(0);
   });
   setTimeout(function () {
-    console.log('Final flush incomplete!');
+    console.log('Final flush timed out!');
     process.exit(1);
   }, conf.shutdownWait || 500);
+};
+
+
+process.on('exit', function () {
+  console.error('Received SIGQUIT; use SIGINT to shutdown gracefully.\nAttempting to cleanup...');
+  forceFlush();
 });
+process.on('SIGINT', forceFlush);

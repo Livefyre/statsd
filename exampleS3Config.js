@@ -107,7 +107,7 @@ Optional Variables:
     sparse: true,
     precision: 1,
     noUpload: false,
-    failedUploadDelay: 2,
+    failedUploadDelay: 2*1000,
     debug: true,
     keyName: function (timestamps) {
       return "key-" + timestamps[0] + "-" + timestamps[timestamps.length - 1];
