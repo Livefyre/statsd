@@ -204,7 +204,7 @@ config.configFile(process.argv[2], function (config, oldConfig) {
 
         for (var i = 0; i < bits.length; i++) {
           var sampleRate = 1;
-          var fields = bits[i].split("|");
+          var fields = bits[i].split(/[\|@]/);
           if (!helpers.is_valid_packet(fields)) {
               l.log('Bad line: ' + fields + ' in msg "' + metrics[midx] +'"');
               counters[bad_lines_seen]++;
@@ -212,7 +212,7 @@ config.configFile(process.argv[2], function (config, oldConfig) {
               continue;
           }
           if (fields[2]) {
-            sampleRate = Number(fields[2].match(/^@([\d\.]+)/)[1]);
+            sampleRate = Number(fields[2]);
           }
 
           var metric_type = fields[1].trim();
