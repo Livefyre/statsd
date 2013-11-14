@@ -24,7 +24,7 @@ var sets = {};
 var counter_rates = {};
 var timer_data = {};
 var pctThreshold = null;
-var flushInterval, keyFlushInt, server, mgmtServer;
+var flushInterval, keyFlushInt, udpServer, tcpServer, mgmtServer;
 var startup_time = Math.round(new Date().getTime() / 1000);
 var backendEvents = new events.EventEmitter();
 var healthStatus = config.healthStatus || 'up';
@@ -162,13 +162,13 @@ config.configFile(process.argv[2], function (config, oldConfig) {
   counters[bad_lines_seen]   = 0;
   counters[packets_received] = 0;
 
-  if (server === undefined) {
+  if (udpServer === undefined) {
 
     // key counting
     var keyFlushInterval = Number((config.keyFlush && config.keyFlush.interval) || 0);
-
     var udp_version = config.address_ipv6 ? 'udp6' : 'udp4';
-    server = dgram.createSocket(udp_version, function (msg, rinfo) {
+
+    var receiveHandler = function (msg, rinfo) {
       backendEvents.emit('packet', msg, rinfo);
       counters[packets_received]++;
       var packet_data = msg.toString();
@@ -187,9 +187,9 @@ config.configFile(process.argv[2], function (config, oldConfig) {
         }
         var bits = metrics[midx].toString().split(':');
         var key = bits.shift()
-                      .replace(/\s+/g, '_')
-                      .replace(/\//g, '-')
-                      .replace(/[^a-zA-Z_\-0-9\.]/g, '');
+          .replace(/\s+/g, '_')
+          .replace(/\//g, '-')
+          .replace(/[^a-zA-Z_\-0-9\.]/g, '');
 
         if (keyFlushInterval > 0) {
           if (! keyCounter[key]) {
@@ -206,10 +206,10 @@ config.configFile(process.argv[2], function (config, oldConfig) {
           var sampleRate = 1;
           var fields = bits[i].split("|");
           if (!helpers.is_valid_packet(fields)) {
-              l.log('Bad line: ' + fields + ' in msg "' + metrics[midx] +'"');
-              counters[bad_lines_seen]++;
-              stats.messages.bad_lines_seen++;
-              continue;
+            l.log('Bad line: ' + fields + ' in msg "' + metrics[midx] +'"');
+            counters[bad_lines_seen]++;
+            stats.messages.bad_lines_seen++;
+            continue;
           }
           if (fields[2]) {
             sampleRate = Number(fields[2].match(/^@([\d\.]+)/)[1]);
@@ -244,9 +244,21 @@ config.configFile(process.argv[2], function (config, oldConfig) {
       }
 
       stats.messages.last_msg_seen = Math.round(new Date().getTime() / 1000);
-    });
+    };
 
-    mgmtServer = net.createServer(function(stream) {
+    var tcpHandler = function (stream) {
+      stream.setEncoding('ascii');
+
+      stream.on('error', function(err) {
+        l.log('Caught ' + err +', Moving on');
+      });
+
+      stream.on('data', function (data) {
+        receiveHandler(data.trim(), {});
+      });
+    };
+
+    var mgmtHandler = function(stream) {
       stream.setEncoding('ascii');
 
       stream.on('error', function(err) {
@@ -308,7 +320,7 @@ config.configFile(process.argv[2], function (config, oldConfig) {
             backendEvents.emit('status', function(err, name, stat, val) {
               if (err) {
                 l.log("Failed to read stats for backend " +
-                        name + ": " + err);
+                  name + ": " + err);
               } else {
                 stat_writer(name, stat, val);
               }
@@ -353,9 +365,14 @@ config.configFile(process.argv[2], function (config, oldConfig) {
         }
 
       });
-    });
+    };
 
-    server.bind(config.port || 8125, config.address || undefined);
+    udpServer = dgram.createSocket(udp_version, receiveHandler);
+    tcpServer = net.createServer(tcpHandler);
+    mgmtServer = net.createServer(mgmtHandler);
+
+    udpServer.bind(config.port || 8125, config.address || undefined);
+    tcpServer.listen(config.tcp_port || 8127, config.address || undefined);
     mgmtServer.listen(config.mgmt_port || 8126, config.mgmt_address || undefined);
 
     util.log("server is up");
@@ -436,7 +453,10 @@ var forceFlush = function () {
 
 
 process.on('exit', function () {
-  console.error('Received SIGQUIT; use SIGINT to shutdown gracefully.\nAttempting to cleanup...');
   forceFlush();
 });
 process.on('SIGINT', forceFlush);
+process.on('SIGQUIT', function () {
+  console.error('Received SIGQUIT; use SIGINT to shutdown gracefully.\nAttempting to cleanup...');
+  forceFlush();
+});
