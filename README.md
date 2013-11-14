@@ -1,6 +1,25 @@
 StatsD [![Build Status][travis-ci_status_img]][travis-ci_statsd]
 ======
 
+
+The Livefyre Statsd Fork
+------
+
+* *S3Backend*
+  * Additional backend which will batch over multiple (configurable #) periods
+  * Upload batch as comma delimited .gz file: <epoch time>,<namespace>,<metric>,<metric type><value>,<valuesPerSecond>
+  * Name your file/prefix based on the time range.
+  * Can run in parallel with the graphite backend.
+
+* *Graceful shutdown*
+  * Because the S3Backend is buffering multiple flush periods, we needed a reliable means for flushing all queued data to S3 before exit.
+
+* *TCP Server*
+  * Same functionality as the UDP server; runs on 8127.
+
+And now, back to the scheduled programming.
+---------
+
 A network daemon that runs on the [Node.js][node] platform and
 listens for statistics, like counters and timers, sent over [UDP][udp]
 and sends aggregates to one or more pluggable backend services (e.g.,
